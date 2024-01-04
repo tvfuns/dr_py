@@ -53,8 +53,14 @@ def file_download(fileUrl, filePath):
         os.remove(filePath)
     # response = requests.get(fileUrl, headers=headers, stream=True, verify=False)
     response = requests.get(fileUrl, headers=headers, stream=True)
-    fileSize = int(response.headers['content-length'])  # 文件大小
+    is_chunked = response.headers.get('Transfer-Encoding') or ''
+    if is_chunked == 'chunked':
+        logger.info('chunked文件不支持获取总文件大小，tqdm模块才能分段下载')
+        return False
+    fileSize = int(response.headers.get('content-length') or 0)  # 文件大小
     logger.info(f'fileSize:{fileSize}')
+    if fileSize < 1:
+        return False
 
     tmpSize = 0
     n = 0
@@ -150,7 +156,8 @@ def file_downloads(files, save_path='download'):
                 logger.info(localtime + ': {} download failed! Url: {}'.format(filename, fileUrl))
                 failedUrl.append(fileUrl)
 
-        except:
+        except Exception as e:
+            logger.info(f'链接{fileUrl}下载失败,由于出现了错误:{e}')
             failedUrl.append(fileUrl)
 
     if len(failedUrl):
@@ -174,7 +181,11 @@ if __name__ == '__main__':
     # urlTxt = 'download/urls.txt'
     # with open(urlTxt, "r") as f:
     #     fileUrls = [line.strip() for line in f.readlines()]
+    response = requests.get('https://ghproxy.liuzhicong.com/https://github.com/hjdhnx/dr_py/archive/refs/heads/main.zip', headers=headers, stream=True)
+    print(response.headers)
+    fileSize = int(response.headers.get('content-length'))  # 文件大小
+    logger.info(f'fileSize:{fileSize}')
 
-    files = [{'url': 'https://ghproxy.liuzhicong.com/https://github.com/hjdhnx/dr_py/archive/refs/heads/main.zip',
-              'name': 'dr_py.zip'}]
-    file_downloads(files, 'tmp')
+    # files = [{'url': 'https://ghproxy.liuzhicong.com/https://github.com/hjdhnx/dr_py/archive/refs/heads/main.zip',
+    #           'name': 'dr_py.zip'}]
+    # file_downloads(files, 'tmp')
