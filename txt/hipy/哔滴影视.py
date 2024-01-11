@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# File  : base_spider.py
+# File  : 哔滴影视.py
 # Author: DaShenHan&道长-----先苦后甜，任凭晚风拂柳颜------
 # Author's Blog: https://blog.csdn.net/qq_32394351
-# Date  : 2024/1/7
+# Date  : 2024/1/10
 
 import os.path
 import sys
@@ -14,45 +14,49 @@ try:
     from base.spider import BaseSpider
 except ImportError:
     from t4.base.spider import BaseSpider
+
 import json
-import time
-import base64
-import re
 from pathlib import Path
-import io
-import tokenize
-from urllib.parse import quote
+import base64
 
 """
 配置示例:
 t4的配置里ext节点会自动变成api对应query参数extend,但t4的ext字符串不支持路径格式，比如./开头或者.json结尾
 api里会自动含有ext参数是base64编码后的选中的筛选条件
  {
-    "key":"hipy_t4_base_spider",
-    "name":"base_spider(hipy_t4)",
+    "key":"hipy_t4_哔滴影视",
+    "name":"哔滴影视(hipy_t4)",
     "type":4,
-    "api":"http://192.168.31.49:5707/api/v1/vod/base_spider",
+    "api":"http://192.168.31.49:5707/api/v1/vod/哔滴影视",
     "searchable":1,
     "quickSearch":0,
     "filterable":1,
-    "ext":"base_spider"
+    "ext":""
 },
 {
-    "key": "hipy_t3_base_spider",
-    "name": "base_spider(hipy_t3)",
+    "key": "hipy_t3_哔滴影视",
+    "name": "哔滴影视(hipy_t3)",
     "type": 3,
-    "api": "{{host}}/txt/hipy/base_spider.py",
+    "api": "{{host}}/txt/hipy/哔滴影视.py",
     "searchable": 1,
     "quickSearch": 0,
     "filterable": 1,
-    "ext": "{{host}}/txt/hipy/base_spider.json"
+    "ext": ""
 },
 """
 
 
 class Spider(BaseSpider):  # 元类 默认的元类 type
+
+    api: str = 'https://www.bdys03.com/api/v1'
+
+    javar = None
+
+    def getDependence(self):
+        return ['base_java_loader']
+
     def getName(self):
-        return "规则名称如:基础示例"
+        return "哔滴影视"
 
     def init_api_ext_file(self):
         """
@@ -111,8 +115,16 @@ class Spider(BaseSpider):  # 元类 默认的元类 type
         if isinstance(extend, list):
             for lib in extend:
                 if '.Spider' in str(type(lib)):
-                    self.module = lib
+                    self.javar = lib
                     break
+
+        if self.javar:
+            jar_file = os.path.join(os.path.dirname(__file__), './jars/bdys.jar')
+            jar_file = Path(jar_file).as_posix()
+            self.javar.init_jar(jar_file)
+            self.class1 = self.javar.jClass('com.C4355b')
+            self.token = str(self.class1.getToken())
+            self.headers.update({'token': self.token})
 
     def isVideoFormat(self, url):
         pass
@@ -126,8 +138,8 @@ class Spider(BaseSpider):  # 元类 默认的元类 type
         @param filterable: 能否筛选，跟t3/t4配置里的filterable参数一致
         @return:
         """
-        class_name = '电影&电视剧&综艺&动漫'  # 静态分类名称拼接
-        class_url = '1&2&3&4'  # 静态分类标识拼接
+        class_name = '电影&电视剧&动漫&综艺'  # 静态分类名称拼接
+        class_url = '0&1001&21&35'  # 静态分类标识拼接
 
         result = {}
         classes = []
@@ -173,15 +185,20 @@ class Spider(BaseSpider):  # 元类 默认的元类 type
         @param extend: 当前筛选数据
         @return:
         """
+        url = self.api + f'/category/{tid}/{pg}?type=0'
+        r = self.fetch(url, headers=self.headers)
+        ret = r.json()
+        data = self.decode(ret['data'])
+        # print(data)
         page_count = 24  # 默认赋值一页列表24条数据
 
-        d = []
-        d.append({
-            'vod_name': '测试',
-            'vod_id': 'index.html',
-            'vod_pic': 'https://gitee.com/CherishRx/imagewarehouse/raw/master/image/13096725fe56ce9cf643a0e4cd0c159c.gif',
-            'vod_remarks': '类型:' + tid,
-        })
+        d = [{
+            'vod_name': vod['movieName'],
+            'vod_id': vod['id'],
+            'vod_pic': vod['cdnCover'],
+            'vod_remarks': vod['rank'],
+            'vod_content': vod['title'],
+        } for vod in data['list']]
         result = {
             'list': d,
             'page': pg,
@@ -198,18 +215,75 @@ class Spider(BaseSpider):  # 元类 默认的元类 type
         @return:
         """
         vod_id = ids[0]
+        url = self.api + f'/detail/{vod_id}'
+        r = self.fetch(url, headers=self.headers)
+        ret = r.json()
+        data = self.decode(ret['data'])
+        print(data)
+
+        vod = data['movie']
+        playlist = data['playlist']
+        titles = []
+        plays = {}
+        for p in playlist:  # 选集列表
+            title = p['title']
+            titles.append(title)
+            if not plays.get(title):
+                plays[title] = []
+            # print(p)
+            if p.get('tosId') and len(playlist) < 2:
+                purl = self.api + '/playurl/' + str(p['id']) + '?type=' + str(p.get('tosId') or '0')
+                print(purl)
+                r = self.fetch(purl, headers=self.headers)
+                ret = r.json()
+                data = self.decode(ret['data'])
+                print(data)
+                url = data['url']
+                plays[title].append({'name': '至尊线路', 'url': url})
+
+            if p.get('url'):
+                for p0 in p['url'].split(','):
+                    plays[title].append(
+                        {'name': p0.split('#')[1] if len(p0.split('#')) > 1 else '道长线路', 'url': p0.split('#')[0]})
+
+            if p.get('url1'):
+                for p1 in p['url1'].split(','):
+                    plays[title].append(
+                        {'name': p1.split('#')[1] if len(p1.split('#')) > 1 else '道长线路', 'url': p1.split('#')[0]})
+
+            if p.get('url2'):
+                for p2 in p['url2'].split(','):
+                    plays[title].append(
+                        {'name': p2.split('#')[1] if len(p2.split('#')) > 1 else '道长线路', 'url': p2.split('#')[0]})
+
+        tabs = {}
+        # key 选集列表 value是线路列表
+        for key, value in plays.items():
+            for tab in value:
+                if not tab['name'] in tabs:
+                    tabs[tab['name']] = []
+
+                tabs[tab['name']].append(f"{key}${tab['url']}")
+
+        vod_play_from = '$$$'.join(tabs.keys())
+
+        vod_play_urls = []
+        for key, value in tabs.items():
+            vod_play_urls.append('#'.join(value))
+        vod_play_url = '$$$'.join(vod_play_urls)
+
         vod = {"vod_id": vod_id,
-               "vod_name": '测试二级',
-               "vod_pic": 'https://gitee.com/CherishRx/imagewarehouse/raw/master/image/13096725fe56ce9cf643a0e4cd0c159c.gif',
-               "type_name": '详情页类型',
-               "vod_year": '详情页年份',
-               "vod_area": '详情页地区',
-               "vod_remarks": '详情页标签',
-               "vod_actor": '详情页演员名称',
-               "vod_director": '详情页导演名称',
-               "vod_content": '详情页剧情描述',
-               "vod_play_from": '测试线路1$$$测试线路2',
-               "vod_play_url": '选集播放1$1.mp4#选集播放2$2.mp4$$$选集播放3$3.mp4#选集播放4$4.mp4'}
+               "vod_name": vod['title'],
+               "vod_pic": vod['cdnCover'],
+               "type_name": ','.join(vod['m_type']),
+               "vod_year": '',
+               "vod_area": vod['area'],
+               "vod_remarks": f"{vod['movieName']} {vod['rank']}",
+               "vod_actor": ','.join(vod['m_performer']),
+               "vod_director": ','.join(vod['m_director']),
+               "vod_content": vod['intro'],
+               "vod_play_from": vod_play_from,
+               "vod_play_url": vod_play_url}
         result = {
             'list': [vod]
         }
@@ -222,64 +296,20 @@ class Spider(BaseSpider):  # 元类 默认的元类 type
         @param quick: 是否来自快速搜索。t3/t4配置里启用了快速搜索，在快速搜索在执行才会是True
         @return:
         """
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.54 Safari/537.36",
-            "Host": "www.bttwo.net",
-            "Referer": "https://www.bttwo.net/"
-        }
-
-        url = f'https://www.bttwo.net/xssearch?q={quote(wd)}'
-        r = self.fetch(url, headers=headers)
-        cookies = ['myannoun=1']
-        for key, value in r.headers.items():
-            if str(key).lower() == 'set-cookie':
-                cookies.append(value.split(';')[0])
-        new_headers = {
-            'Cookie': ';'.join(cookies),
-            # 'Pragma': 'no-cache',
-            # 'Origin': 'https://www.bttwo.net',
-            # 'Referer': url,
-            # 'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-            # 'Sec-Ch-Ua-Mobile': '?0',
-            # 'Sec-Ch-Ua-Platform': '"Windows"',
-            # 'Sec-Fetch-Dest': 'document',
-            # 'Sec-Fetch-Mode': 'navigate',
-            # 'Sec-Fetch-Site': 'same-origin',
-            # 'Sec-Fetch-User': '?1',
-            # 'Upgrade-Insecure-Requests': '1',
-        }
-        headers.update(new_headers)
-        print(headers)
-
-        html = self.html(r.text)
-        captcha = ''.join(html.xpath('//*[@class="erphp-search-captcha"]/form/text()')).strip()
-        print('验证码:', captcha)
-        answer = self.eval_computer(captcha)
-        print('回答:', captcha, answer)
-        data = {'result': str(answer)}
-        print('待post数据:', data)
-        self.post(url, data=data, headers=headers, cookies=None)
-        r = self.fetch(url, headers=headers)
-        # print(r.text)
-        html = self.html(r.text)
-        lis = html.xpath('//*[contains(@class,"search_list")]/ul/li')
-        print('搜索结果数:', len(lis))
+        url = self.api + f'/search/{wd}/{pg}'
+        r = self.fetch(url, headers=self.headers)
+        ret = r.json()
+        data = self.decode(ret['data'])
+        print(data)
         d = []
-        if len(lis) < 1:
+        for li in data['list']:
             d.append({
-                'vod_name': wd,
-                'vod_id': 'index.html',
-                'vod_pic': 'https://gitee.com/CherishRx/imagewarehouse/raw/master/image/13096725fe56ce9cf643a0e4cd0c159c.gif',
-                'vod_remarks': '测试搜索',
+                'vod_name': li['movieName'],
+                'vod_id': li['id'],
+                'vod_pic': li['cdnCover'],
+                'vod_remarks': li['curEp'],
+                'vod_content': li['intro'],
             })
-        else:
-            for li in lis:
-                d.append({
-                    'vod_name': ''.join(li.xpath('h3//text()')),
-                    'vod_id': ''.join(li.xpath('a/@href')),
-                    'vod_pic': ''.join(li.xpath('a/img/@data-original')),
-                    'vod_remarks': ''.join(li.xpath('p//text()')),
-                })
         result = {
             'list': d
         }
@@ -294,11 +324,14 @@ class Spider(BaseSpider):  # 元类 默认的元类 type
         @param vipFlags: vip标识
         @return:
         """
-        url = 'http://bizcommon.alicdn.com/l2nDqpMmn6DGHnWzZQA/Cg9qI5imMInpPvK5Mnm%40%40hd.m3u8'
-        parse = 0
+        url = id
         headers = {
             'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 9_1 like Mac OS X) AppleWebKit/601.1.46 (KHTML, like Gecko) Version/9.0 Mobile/13B143 Safari/601.1'
         }
+        if 'm3u8' not in url:
+            parse = 0
+        else:
+            parse = 1
         result = {
             'parse': parse,  # 1=嗅探,0=播放
             'playUrl': '',  # 解析链接
@@ -311,75 +344,31 @@ class Spider(BaseSpider):  # 元类 默认的元类 type
         "player": {},
         "filter": {}
     }
-    header = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.54 Safari/537.36",
-        "Host": "www.baidu.com",
-        "Referer": "https://www.baidu.com/"
+    headers = {
+        "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 7.0; HUAWEI MLA-AL10 Build/HUAWEIMLA-AL10)",
+        "token": ""
     }
 
     def localProxy(self, param):
         return [200, "video/MP2T", action, ""]
 
     # -----------------------------------------------自定义函数-----------------------------------------------
-    def eval_computer(self, text):
-        """
-        自定义的字符串安全计算器
-        @param text:字符串的加减乘除
-        @return:计算后得到的值
-        """
-        localdict = {}
-        self.safe_eval(f'ret={text.replace("=", "")}', localdict)
-        ret = localdict.get('ret') or None
-        return ret
-
-    def safe_eval(self, code: str = '', localdict: dict = None):
-        code = code.strip()
-        if not code:
-            return {}
-        if localdict is None:
-            localdict = {}
-        builtins = __builtins__
-        if not isinstance(builtins, dict):
-            builtins = builtins.__dict__.copy()
-        else:
-            builtins = builtins.copy()
-        for key in ['__import__', 'eval', 'exec', 'globals', 'dir', 'copyright', 'open', 'quit']:
-            del builtins[key]  # 删除不安全的关键字
-        # print(builtins)
-        global_dict = {'__builtins__': builtins,
-                       'json': json, 'print': print,
-                       're': re, 'time': time, 'base64': base64
-                       }  # 禁用内置函数,不允许导入包
-        try:
-            self.check_unsafe_attributes(code)
-            exec(code, global_dict, localdict)
-            return localdict
-        except Exception as e:
-            return {'error': f'执行报错:{e}'}
-
-    # ==================== 静态函数 ======================
-    @staticmethod
-    def check_unsafe_attributes(string):
-        """
-        安全检测需要exec执行的python代码
-        :param string:
-        :return:
-        """
-        g = tokenize.tokenize(io.BytesIO(string.encode('utf-8')).readline)
-        pre_op = ''
-        for toktype, tokval, _, _, _ in g:
-            if toktype == tokenize.NAME and pre_op == '.' and tokval.startswith('_'):
-                attr = tokval
-                msg = "access to attribute '{0}' is unsafe.".format(attr)
-                raise AttributeError(msg)
-            elif toktype == tokenize.OP:
-                pre_op = tokval
+    def decode(self, text):
+        bt = base64.b64decode(text)
+        res = self.class1.dec(bt)
+        return self.str2json(str(res))
 
 
 if __name__ == '__main__':
+    from t4.core.loader import t4_spider_init
+
     spider = Spider()
-    spider.init()
+    t4_spider_init(spider)
     # spider.init_api_ext_file()  # 生成筛选对应的json文件
-    spider.log({'key': 'value'})
-    spider.log('====文本内容====')
-    # spider.searchContent('斗罗大陆')
+    # spider.log({'key': 'value'})
+    # spider.log('====文本内容====')
+    # print(spider.homeContent(True))
+    # print(spider.homeVideoContent())
+    # print(spider.categoryContent('0', 1, False, None))
+    # print(spider.detailContent([24420]))
+    spider.searchContent('斗罗大陆')

@@ -26,10 +26,20 @@ api里会自动含有ext参数是base64编码后的选中的筛选条件
     "type":4,
     "api":"http://192.168.31.49:5707/api/v1/vod/樱花动漫",
     "searchable":1,
-    "quickSearch":1,
+    "quickSearch":0,
     "filterable":1,
     "ext":"https://jihulab.com/qiaoji/open/-/raw/main/yinghua"
-}
+},
+{
+    "key": "hipy_t3_樱花动漫",
+    "name": "樱花动漫(hipy_t3)",
+    "type": 3,
+    "api": "{{host}}/txt/hipy/樱花动漫.py",
+    "searchable": 1,
+    "quickSearch": 0,
+    "filterable": 1,
+    "ext": "https://jihulab.com/qiaoji/open/-/raw/main/yinghua"
+},
 """
 
 
@@ -109,10 +119,18 @@ class Spider(BaseSpider):  # 元类 默认的元类 type
         @param extend:
         @return:
         """
-        if extend.startswith('http'):
-            self.init_extend(extend)
+        ext = self.extend
+        if ext.startswith('http'):
+            self.init_extend(ext)
         else:
             self.init_extend(self.api_qj)
+
+        # 装载模块，这里只要一个就够了
+        if isinstance(extend, list):
+            for lib in extend:
+                if '.Spider' in str(type(lib)):
+                    self.module = lib
+                    break
 
     def isVideoFormat(self, url):
         pass
@@ -342,15 +360,15 @@ if __name__ == '__main__':
     # 在线aes测试 https://config.net.cn/tools/AES.html
     # 分类页:http://60.204.185.245:7090/appto/v1/home/cateData?id=1
     # 推荐页:http://60.204.185.245:7090/appto/v1/config/get?p=android
+    from t4.core.loader import t4_spider_init
     spider = Spider()
-    # spider.init('https://jihulab.com/qiaoji/open/-/raw/main/yinghua')
-    spider.init()
+    t4_spider_init(spider,'https://jihulab.com/qiaoji/open/-/raw/main/yinghua')
     # spider.init_api_ext_file()  # 生成筛选对应的json文件
 
     # print(spider.homeContent(True))
     # print(spider.homeVideoContent())
     # print(spider.categoryContent('1', 1, True, {'year': '2024'}))
     # print(spider.detailContent([110078]))
-    # print(spider.searchContent('斗罗大陆'))
+    print(spider.searchContent('斗罗大陆'))
     # print(spider.playerContent(None, 'f1d7d074f624e993e425f|11d1d091b0b28|31613145e4a7c|518737c8650978', None))
     # spider.searchContent('斗罗大陆')
