@@ -151,6 +151,13 @@ class Spider(BaseSpider):  # 元类 默认的元类 type
 
         gParam['inited'] = True
 
+    def isVideo(self):
+        """
+        返回是否为视频的匹配字符串
+        @return: None空 reg:正则表达式  js:input js代码
+        """
+        return 'js:input.includes(".m3u8)?true:false'
+
     def isVideoFormat(self, url):
         pass
 
@@ -386,6 +393,11 @@ class Spider(BaseSpider):  # 元类 默认的元类 type
     def localProxy(self, params):
         # print(params)
         url = params.get('url')
+        if not url:
+            # return [302, 'text/html', None, {'location': 'https://www.baidu.com'}]
+            # return [404, 'text/plain', 'Not Found']
+            return [403, 'text/plain', '403 forbidden. url is required']
+
         name = params.get('name') or 'm3u8'
         burl = 'https://www.bdys03.com'
         new_url = url.replace("www.bde4.cc", "www.bdys03.com")
@@ -402,17 +414,7 @@ class Spider(BaseSpider):  # 元类 默认的元类 type
         content = pdata.strip()
 
         media_type = 'text/plain' if 'txt' in name else 'video/MP2T'
-        action = {
-            'url': url,
-            'header': headers,
-            'param': '',
-            'type': media_type,
-            'after': ''
-        }
-        if '3' in self.ENV:
-            return [200, media_type, action, content]
-        else:
-            return [200, media_type, content]
+        return [200, media_type, content]
 
     # -----------------------------------------------自定义函数-----------------------------------------------
     def decode(self, text):
